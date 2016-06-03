@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Title</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+      .note_text { color: #FF00FF;}
+      .note { color: #4F4F4F;}
+      .diy_text { color: #FFcc00;}
+      .red { color: red; }
+      .example { font-size: 75%;}
+      #hideform {display:none;}
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+      class: center, middle
+      # Cleaning data with OpenRefine
+      ### A step by step exercise on a real world example
+      ---
+      class: center, middle
+      Often times a great impediment in data analysis is the poor quality of data itself.
+      The purpose of this presentation is to explore the functionalities of OpenRefine that can
+      help us tidy and normalize data.
+
+      We will clean up a real word dataset of public procurement contracts to get familiar
+      with these features.
+
+      You can download the dataset from [Google Drive](https://drive.google.com/open?id=0B58kVdotYLhDaUNQTlVzNVRqRkk)
+      or by cloning the [GitHub project](https://github.com/georgiana-b/openrefine-workshop) which also contains the presentation.
+
+      Let's dig in!
+      ---
+      class: center, middle
+      # 1. Setup
+        OpenRefine is open source and it's available for all widely used operating systems.
+        You can find [here](http://openrefine.org/download.html) all versions along with
+        straightforward instructions to install it.
+
+        If you open a big file, OpenRefine might get stuck because the default amount of memory allocated for it
+        is not enough. Check [this page](https://github.com/OpenRefine/OpenRefine/wiki/FAQ:-Allocate-More-Memory)
+        to see how you can give it more memory.
+      ---
+      class: center, middle
+      # 2. Import
+        After you start it, OpenRefine will open in new browser window. Click on `Create Project`
+        and import the dataset. There is a list of supported file types from which we will choose
+        `CSV / TSV / separator-based files`.
+
+        For this exercise we will make the following changes to the default settings:
+
+        * uncheck `Store blank rows`
+        * check `Parse cell text into numbers, dates, ...`
+
+
+        As you can see in the preview, this last option converts the fields containing only numbers, dates
+        etc. from text to their corresponding type.
+
+        When you're ready, click on `Create Project` to move on.
+      ---
+      class: center, middle
+        # 3. Moving things around
+        OpenRefine offers a convenient way to move around and remove columns.
+
+        We will move  _operator_official_name_  and  _additional_information_ columns among the first and remove _activity_contractor_.
+
+        To access these options click on `All-> Edit columns -> Re-order/remove columns`.
+        Drag columns up and down to change order or drop them in the right side box to have them removed.
+      ---
+      class: center, middle
+        # 4. Transformations
+        We are going to prepare the _operator_official_name_ column for analysis.
+
+        .note[.note_text[NOTE:] For all the operations on a certain column, click on the arrow in front of it's name.]
+
+        Because some analyzers are case sensitive we'll make a new helper column from _operator_official_name_
+        with all string uppercase and call it _operator_name_upcase_.
+        Click on `Edit Column -> Add column based on this column` then replace `value` with:
+
+        ```grel
+        toUppercase(value)
+        ```
+
+        `value` refers to the value in the current column.
+        `toUppercase()` is one of [GREL's string functions](https://github.com/OpenRefine/OpenRefine/wiki/GREL-String-Functions)
+        that does what it says.
+
+        .note[.note_text[NOTE:] Always check the preview in the transformation window to make sure your transformation does what it should.]
+
+
+      ---
+      class: center, middle
+        .note[.note_text[NOTE:]OpenRefine supports coding in the following languages:
+        [GREL](https://github.com/OpenRefine/OpenRefine/wiki/General-Refine-Expression-Language),
+        [Jython](https://wiki.python.org/jython/WhyJython) and [Clojure](https://clojure.org/).
+        For this tutorial we use GREL.]
+
+        We'll use our new column _operator_name_upcase_ to find different names that refer to the same company.
+
+        But first, we should get rid of unwanted whitepaces. They may seem harmsless until
+        strings that are apparently the same are identified as different because
+        OpenRefine takes whitespaces into consideration.
+
+        To remove them for all values in the column click on
+        `Edit cells -> Common Tranformation -> Trim leading and trailing whitespaces`,
+        and then `Collapse consecutive whitespaces`.
+
+      ---
+      class: center, middle
+        Oftentimes scraped data is left with some unwanted HTML as in the _additional_information_ column.
+        Fortunately, OpenRefine has some [convenient HTML parsing functions too.](https://github.com/OpenRefine/OpenRefine/wiki/GREL-Other-Functions#jsoup-html-parsing-functions)
+        Click on `Edit cells -> Transform` and replace `value` with:
+
+        ```grel
+        parseHtml(value).select("P")[0].htmlText().toString()
+        ```
+
+        `parseHtml(value)` detects HTML tags in the value and adds missing tags if any.
+        `select(tag)` gathers all occurrences of the specified tag in an array(a.k.a list).
+        we use `[0]` to get the first paragraph and `htmlText()` to extract the text from it.
+        `toString()` converts the results of the previous function into a string.
+
+        .note[
+        .diy_text[DIY:]
+        Explore [more complex examples](https://github.com/OpenRefine/OpenRefine/wiki/StrippingHTML#extract-html-attributes-text-links-with-integrated-grel-jsoup-commands)
+        in the OpenRefine wiki.
+        ]
+
+        We'll proceed to the next steps and make more transformations if we notice the need.
+      ---
+      class: center, middle
+
+        # 5. Cluster and edit (i.e. the juicy part)
+        Click on `Edit cells -> Cluster and edit`.
+        Notice the `Method` and the `Keying function` dropdowns.
+        OpenRefine's wiki has [a page where each of these are explained thoroughly](https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth)
+        and I recommend reading it because it will help you make sense of their results.
+
+        By looking at the first few results we notice two common issues that are easily
+        solvable without having to match them manually:
+
+        * some strings have a "." at the end
+        * both "LIMITED" and "LTD" are used
+
+
+        To solve the first one we'd like to select only the names which end with a dot.
+        That's what facets are for. Click on `Facet -> Custom text facet` and replace `value` with:
+
+        ```grel
+        endsWith(value, ".")
+        ```
+
+        `endsWith(value, string)` checks if value ends with string and returns _true_ if it does and _false_ if it doesn't
+
+      ---
+      class: center, middle
+
+        We'll select those that fullfil the condition (_true_) and apply the
+        following transformation to remove the dot:
+
+        ```grel
+        replace(value, /.$/, "")
+        ```
+
+        `replace(string s, string f, string r)` returns the string obtained by replacing f with r in s.
+        f can be a regular expression, in which case r can also contain capture groups declared in f.
+
+        We used the [regular expression](https://github.com/OpenRefine/OpenRefine/wiki/Understanding-Regular-Expressions) ``/.$/` to identify all "." that are right before the end ("$" matches the end of the string).
+
+        You should see `true 0` in the facet after applying this.Close it and let's move on.
+
+        .note[
+        .diy_text[DIY:]
+        For the second issue use `replace` again to change "LIMITED" into "LTD".
+        You should see a message that 1672 cells were transformed.
+
+        If you get stuck, <span style="text-decoration:underline;" onclick="javascript:show_text_boxes();">see the solution.</span>
+
+        <span id="solution" style="display:none;">`replace(value, "LIMITED", "LTD")`</span>
+        ]
+      ---
+      class: center, middle
+
+        Back to cluster and edit, we'll start with the [`fingerprint`](https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth#fingerprint) keying function.
+        It will help us match names that contain the same words but in different order or with different punctuation.
+        Click on the name you want to keep and check the box corresponding to the group
+        if you're happy with the match. Alternatively, use `Select all`.
+        Then `Merge selected and Re-cluster`.
+
+        .note[
+        .diy_text[DIY:]
+        Try out [n-gram fingerprint](https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth#n-gram-fingerprint)
+        with `Ngram Size 2`.]
+
+        Moving on to phonetic keying functions, we'll use [methaphone3](https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth#phonetic-fingerprint)
+        which is the one for English. This is very useful for correcting mistakes made
+        by spelling words according to how they sound.
+        As you'll notice by looking at the results, this function is more permissive.
+
+        To reduce the number of overfitted records we'll play with the facets OpenRefine built for us on the right side.
+        Reduce the upper limit of `Choices in Cluster to 3.90` and `Length Variance of Choices to 15`
+        by dragging it to the left.
+        Carefully merge what seems a good match.
+      ???
+        Fingerprint assumes that two names have identical alphabetical characters and spacing,
+        regardless of capitalization and punctuation. It is useful for matching phrases
+        that contain the same words but in different order or with different punctuation.
+        Ex: Charlie O'hire/Charlie Ohire/ O'hire Charlie
+
+        Phonetic keying functions make keys from the way words are pronounced.
+        Metaphone3 is for English and cologne-phonetic is for German.
+        They are very good at matching words that are written differently but sound the same.
+        Ex: Reuben and Ruben in English.
+        They are also more permissive so I suggest reducing the Choices in cluster and Length Variance of Choices parameters to exclude over-matched phrases.
+
+      ---
+      class: center, middle
+        You might notice that some groups are correctly identified except for few of their constituents:
+
+        .example[
+        * THISTLE INSURANCE SERVICES LTD
+        * THISTLE INSURANCE SERVICES
+        * THISTLE INSURANCE SERVICES LTD, LONDON MARKET RISKS .red[-2 companies here]
+        * THISTLE INSURANCE SERVICES LTD. T/A JARDINE LLOYD THOMPSON TENANTS RISKS
+        ]
+        Fortunately we can workaround this. Hover over the group and click on `Browse this cluster`.
+        OpenRefine will open a new tab containing only the rows in this group.
+
+        Now we can filter out the outlier and merge the others. Go to `Facet -> Text facet`
+        then in the facet box `include` only the desired ones, click on `Cluster`,
+        chose the function that discovered it (`methaphone3`) and merge them.
+
+      ---
+      class: center, middle
+
+        We'll now explore the `nearest neighbor` method, particularly the [`levenshtein`](https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth#levenshtein-distance)
+        distance function. This is very useful to correct typos.
+
+        Set `Radius to 1.0` and `Block chars to 6`.
+        Merge what you're happy with and recluster.
+
+        .note[
+        .diy_text[DIY:]
+        Increase `Radius to 2.0` and `Block chars to 12` and check if you can find more matches.
+        ]
+
+        This method is more expensive in terms of resources and time so you shouldn't increase the
+        parameters too much on a large dataset.
+
+      ---
+      class: center, middle
+
+        # 6. Explore further
+
+        You can find a lot more tutorials and advice on the [RefinePro](http://kb.refinepro.com/) blog.
+        RefinePro is the enterpise version of OpenRefine but they share most of the functionality.
+
+        If you'll have questions or encounter issues using OpenRefine, they also
+        have a [mailing list](https://groups.google.com/forum/#!forum/openrefine)
+        where you can ask for help.
+
+        .note[
+        .diy_text[DIY:]
+        Go even further with cleaning this dataset by following [this tutorial](https://vimeo.com/17924204)
+        on how to reconcile company names with the awesome [OpenCorporates](https://opencorporates.com/)
+        database using their API.
+        ]
+
+        OpenRefine is a wonderful tool that lifts a lot of the pain of cleaning messy data.
+        I hope you will use it and find it helpful.
+
+    </textarea>
+    <script src="https://gnab.github.io/remark/downloads/remark-latest.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+    <script>
+      function show_text_boxes(){
+        document.getElementById("solution").style.display="inline-block";
+      }
+    </script>
+  </body>
+</html>
